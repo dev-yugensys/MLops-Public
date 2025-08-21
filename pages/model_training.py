@@ -7,8 +7,11 @@ import mlflow.sklearn
 import numpy as np
 import pandas as pd
 import streamlit as st
+import subprocess
+import webbrowser
 from datetime import datetime
 from pathlib import Path
+from threading import Thread
 from sklearn import datasets
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import (
@@ -152,9 +155,49 @@ def save_best_model(results, dataset_name):
     joblib.dump(best_model, save_path)
     return save_path
 
+# ====== HELPER FUNCTIONS ======
+def start_mlflow_ui(port=5000):
+    """Start MLflow UI in a background process"""
+    try:
+        # Check if MLflow UI is already running
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        result = sock.connect_ex(('127.0.0.1', port))
+        sock.close()
+        
+        if result == 0:
+            st.warning(f"MLflow UI is already running on port {port}")
+        else:
+            # Start MLflow UI in a separate thread
+            def run_mlflow_ui():
+                subprocess.Popen(
+                    ["mlflow", "ui", "-p", str(port)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    shell=True
+                )
+            
+            thread = Thread(target=run_mlflow_ui, daemon=True)
+            thread.start()
+            time.sleep(2)  # Give it a moment to start
+            
+        # Open the MLflow UI in the default browser
+        webbrowser.open_new_tab(f"http://localhost:{port}")
+        return True
+    except Exception as e:
+        st.error(f"Failed to start MLflow UI: {str(e)}")
+        return False
+
 # ====== STREAMLIT UI ======
 st.set_page_config(page_title="Model Training", layout="wide")
 st.title("Model Training with MLflow")
+
+# Add MLflow UI button at the top
+if st.button("🚀 Open MLflow UI", help="Open MLflow UI to track experiments"):
+    if start_mlflow_ui():
+        st.success("MLflow UI opened in a new tab!")
+    else:
+        st.error("Failed to start MLflow UI. Make sure MLflow is installed and port 5000 is available.")
 
 dataset_name = st.selectbox("Select Dataset", list(MODEL_CONFIGS.keys()))
 
