@@ -7,6 +7,7 @@ import pandas as pd
 import joblib
 from pathlib import Path
 import os
+import uuid
 
 # Import components and utilities
 from components.feature_inputs import get_iris_features
@@ -14,6 +15,7 @@ from components.results_display import display_iris_prediction
 
 # Import configuration
 from config import MODEL_CONFIG, CLASS_NAMES
+from utils.db import log_request, update_request
 
 def load_iris_model():
     """Load the Iris classification model from streamlit/models/iris_classification_model.pkl"""
@@ -258,15 +260,39 @@ def main():
         # Show loading state and make prediction
         with st.spinner("Classifying iris flower..."):
             if model is not None:
-                # Make prediction
-                prediction = predict_iris(model, features)
-                if prediction:
-                    # Display prediction
-                    display_iris_prediction(prediction)
-                    
-                    # Debug: Show the full prediction object
-                    st.sidebar.write("=== Full Prediction ===")
-                    st.sidebar.json(prediction)
+                # Log the prediction request
+                user_id = st.session_state.get('user_id', str(uuid.uuid4()))
+                request_id = log_request(
+                    user_id=user_id,
+                    model_name='iris_classifier',
+                    input_data=features
+                )
+                
+                try:
+                    # Make prediction
+                    prediction = predict_iris(model, features)
+                    if prediction:
+                        # Update the request with successful result
+                        update_request(
+                            request_id=request_id,
+                            output_data=prediction,
+                            status='completed'
+                        )
+                        
+                        # Display prediction
+                        display_iris_prediction(prediction)
+                        
+                        # Debug: Show the full prediction object
+                        st.sidebar.write("=== Full Prediction ===")
+                        st.sidebar.json(prediction)
+                except Exception as e:
+                    # Update the request with error
+                    update_request(
+                        request_id=request_id,
+                        status='failed',
+                        error=str(e)
+                    )
+                    st.error(f"Prediction failed: {str(e)}")
             else:
                 st.error("Failed to load the model. Please check the model file.")
     

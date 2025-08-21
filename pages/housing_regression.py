@@ -7,6 +7,8 @@ import pandas as pd
 import joblib
 from pathlib import Path
 import os
+import uuid
+from datetime import datetime
 
 # Import components
 from components.feature_inputs import get_housing_features
@@ -14,6 +16,7 @@ from components.results_display import display_housing_prediction
 
 # Import configuration
 from config import MODEL_CONFIG
+from utils.db import log_request, update_request
 
 def load_housing_model():
     """Load the housing regression model from streamlit/models/housing_regression_model.pkl"""
@@ -83,15 +86,23 @@ def predict_housing_price(model, features):
         input_df = pd.DataFrame(input_data)
         
         # Make prediction
-        prediction = model.predict(input_df)[0]
+        prediction = float(model.predict(input_df)[0])  # Convert numpy float to Python float
         
-        # Calculate confidence interval (simplified example)
-        confidence_interval = (prediction * 0.95, prediction * 1.05)
+        # Calculate confidence interval (simplified example) and convert to Python floats
+        confidence_interval = (float(prediction * 0.95), float(prediction * 1.05))
+        
+        # Convert features to serializable types
+        serializable_features = {}
+        for key, value in features.items():
+            if hasattr(value, 'item') and callable(getattr(value, 'item')):
+                serializable_features[key] = value.item()  # Convert numpy types to Python native
+            else:
+                serializable_features[key] = value
         
         return {
             'prediction': prediction,
             'confidence_interval': confidence_interval,
-            'input_features': features  # Return original features for display
+            'input_features': serializable_features  # Use serializable features
         }
         
     except Exception as e:
@@ -120,9 +131,33 @@ def main():
     if st.button("Predict House Value"):
         if 'model' in st.session_state and st.session_state.model is not None:
             with st.spinner("Making prediction..."):
-                result = predict_housing_price(st.session_state.model, features)
-                if result:
-                    display_housing_prediction(result)
+                # Log the prediction request
+                user_id = st.session_state.get('user_id', str(uuid.uuid4()))
+                request_id = log_request(
+                    user_id=user_id,
+                    model_name='housing_regression',
+                    input_data=features
+                )
+                
+                try:
+                    # Make prediction
+                    result = predict_housing_price(st.session_state.model, features)
+                    if result:
+                        # Update the request with successful result
+                        update_request(
+                            request_id=request_id,
+                            output_data=result,
+                            status='completed'
+                        )
+                        display_housing_prediction(result)
+                except Exception as e:
+                    # Update the request with error
+                    update_request(
+                        request_id=request_id,
+                        status='failed',
+                        error=str(e)
+                    )
+                    st.error(f"Prediction failed: {str(e)}")
         else:
             st.error("Please load a model first.")
     

@@ -5,6 +5,8 @@ import streamlit as st
 from pathlib import Path
 import sys
 import os
+import json
+from datetime import datetime
 
 # Add the current directory to the Python path
 current_dir = Path(__file__).parent
@@ -13,6 +15,9 @@ if str(current_dir) not in sys.path:
 
 # Import configuration
 from config import PAGE_CONFIG, UI, MODEL_CONFIG, CLASS_NAMES
+
+# Import database utilities
+from utils.db import log_request, update_request
 
 # Set page configuration
 st.set_page_config(**PAGE_CONFIG)
