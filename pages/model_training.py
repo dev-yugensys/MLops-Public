@@ -166,10 +166,69 @@ st.info(f"📊 **{num_models} models** will be trained with a total of **{total_
 
 if st.button("Train Models"):
     st.write("⏳ Starting training...")
-    log_placeholder = st.empty()
     progress_bar = st.progress(0)
+    
+    # Create a container for logs with max height and scrollable
+    log_container = st.container()
+    log_placeholder = log_container.empty()
+    
+    # Add some CSS to make the log container scrollable with a fixed height
+    st.markdown("""
+    <style>
+    .log-container {
+        max-height: 300px;
+        overflow-y: auto;
+        border: 1px solid #e0e0e0;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        background-color: #1e1e1e;  /* Dark background */
+        color: #e0e0e0;  /* Light text color */
+        font-family: monospace;
+        white-space: pre-wrap;
+        margin-top: 1rem;
+    }
+    .log-entry {
+        margin: 0.25rem 0;
+        padding: 0.5rem;
+        border-radius: 0.25rem;
+        line-height: 1.4;
+    }
+    .log-entry:nth-child(odd) {
+        background-color: #2d2d2d;  /* Slightly lighter dark for odd rows */
+    }
+    .log-entry:hover {
+        background-color: #3a3a3a;  /* Hover effect */
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Initialize log list in session state if it doesn't exist
+    if 'training_logs' not in st.session_state:
+        st.session_state.training_logs = []
+    
+    def log_message(message):
+        """Add a message to the training logs"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        formatted_message = f"[{timestamp}] {message}"
+        st.session_state.training_logs.append(formatted_message)
+        # Keep only the last 50 log messages to prevent memory issues
+        if len(st.session_state.training_logs) > 50:
+            st.session_state.training_logs = st.session_state.training_logs[-50:]
+        # Update the log display
+        log_placeholder.markdown(
+            f'<div class="log-container">' + 
+            ''.join(f'<div class="log-entry">{log}</div>' for log in st.session_state.training_logs) + 
+            '</div>', 
+            unsafe_allow_html=True
+        )
+    
+    # Clear previous logs when starting new training
+    st.session_state.training_logs = []
+    log_message("Initializing training...")
+    
     X, y = load_dataset(dataset_name)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    log_message(f"Loaded {dataset_name} dataset with {X.shape[0]} samples and {X.shape[1]} features")
 
     setup_mlflow(dataset_name.replace(" ", "_"))
     results = {}
@@ -183,35 +242,73 @@ if st.button("Train Models"):
 
         for params in param_sets:
             current_step += 1
-            progress_bar.progress(current_step / total_steps)
+            progress = current_step / total_steps
+            progress_bar.progress(progress)
             with mlflow.start_run(run_name=f"{model_name}"):
                 mlflow.log_params(params)
-                log_placeholder.write(f"**Training {model_name}** ({current_step}/{total_steps}) with params {params}")
-                model = ModelClass(**params)
-                model.fit(X_train, y_train)
+                log_message(f"🚀 Training {model_name} ({current_step}/{total_steps}): {params}")
+                try:
+                    model = ModelClass(**params)
+                    start_time = time.time()
+                    model.fit(X_train, y_train)
+                    training_time = time.time() - start_time
+                    log_message(f"✅ Completed {model_name} in {training_time:.2f} seconds")
 
-                if MODEL_CONFIGS[dataset_name]["task_type"] == "classification":
-                    y_pred = model.predict(X_test)
-                    metrics = {
-                        "accuracy": accuracy_score(y_test, y_pred),
-                        "precision": precision_score(y_test, y_pred, average="weighted"),
-                        "recall": recall_score(y_test, y_pred, average="weighted"),
-                        "f1_score": f1_score(y_test, y_pred, average="weighted")
-                    }
-                else:
-                    y_pred = model.predict(X_test)
-                    metrics = {
-                        "mse": mean_squared_error(y_test, y_pred),
-                        "mae": mean_absolute_error(y_test, y_pred),
-                        "r2": r2_score(y_test, y_pred),
-                        "explained_variance": explained_variance_score(y_test, y_pred)
-                    }
+                    if MODEL_CONFIGS[dataset_name]["task_type"] == "classification":
+                        y_pred = model.predict(X_test)
+                        accuracy = accuracy_score(y_test, y_pred)
+                        precision = precision_score(y_test, y_pred, average="weighted")
+                        recall = recall_score(y_test, y_pred, average="weighted")
+                        f1 = f1_score(y_test, y_pred, average="weighted")
+                        
+                        metrics = {
+                            "accuracy": accuracy,
+                            "precision": precision,
+                            "recall": recall,
+                            "f1_score": f1
+                        }
+                        
+                        log_message(f"📊 {model_name} Results - Accuracy: {accuracy:.4f}, F1: {f1:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}")
+                    else:
+                        y_pred = model.predict(X_test)
+                        mse = mean_squared_error(y_test, y_pred)
+                        mae = mean_absolute_error(y_test, y_pred)
+                        r2 = r2_score(y_test, y_pred)
+                        explained_var = explained_variance_score(y_test, y_pred)
+                        
+                        metrics = {
+                            "mse": mse,
+                            "mae": mae,
+                            "r2": r2,
+                            "explained_variance": explained_var
+                        }
+                        
+                        log_message(f"📊 {model_name} Results - R²: {r2:.4f}, MSE: {mse:.4f}, MAE: {mae:.4f}, Explained Variance: {explained_var:.4f}")
 
-                mlflow.log_metrics(metrics)
-                results[model_name].append({"model": model, "metrics": metrics})
-                log_placeholder.write(f"✅ Finished {model_name} | Metrics: {metrics}")
+                    mlflow.log_metrics(metrics)
+                    results[model_name].append({
+                        "params": params,
+                        "metrics": metrics,
+                        "model": model
+                    })
+                    
+                except Exception as e:
+                    log_message(f"❌ Error training {model_name}: {str(e)}")
+                    continue
 
-    best_model_path = save_best_model(results, dataset_name)
-    st.success(f"🎉 Training completed! Best model saved at: {best_model_path}")
+    try:
+        best_model_path = save_best_model(results, dataset_name)
+        log_message(f"🏆 Training completed! Best model saved to {best_model_path}")
+        st.success("✅ Training completed successfully!")
+        
+        # Add a button to clear logs
+        if st.button("Clear Logs"):
+            st.session_state.training_logs = []
+            log_placeholder.markdown('<div class="log-container"></div>', unsafe_allow_html=True)
+            st.rerun()
+            
+    except Exception as e:
+        log_message(f"❌ Error saving best model: {str(e)}")
+        st.error("An error occurred during training. Please check the logs for details.")
     st.info("Run this to view MLflow UI:")
     st.code(f"mlflow ui --backend-store-uri file:{MLFLOW_DIR}")

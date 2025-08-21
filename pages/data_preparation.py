@@ -184,32 +184,14 @@ def process_dataset(file_name: str):
 
 def main():
     st.title("📊 Data Preparation")
-    st.caption("Upload, explore, and preprocess your datasets for machine learning")
+    st.caption("Explore and preprocess datasets for machine learning")
     
-    # File upload section
-    st.header("Upload New Dataset")
-    uploaded_file = st.file_uploader(
-        "Choose a CSV or Excel file",
-        type=["csv", "xlsx", "xls"]
-    )
-    
-    if uploaded_file is not None:
-        try:
-            file_path = RAW_DATA_DIR / uploaded_file.name
-            with st.spinner(f"Saving {uploaded_file.name}..."):
-                with open(file_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-            st.success(f"✅ Saved {uploaded_file.name} to {file_path}")
-            st.rerun()  # Refresh the page to show the new dataset
-        except Exception as e:
-            st.error(f"❌ Error saving file: {str(e)}")
-    
-    # Dataset selection and processing
+    # List available datasets in raw data directory
     st.header("🔍 Dataset Explorer")
     datasets = list_available_datasets()
     
     if not datasets:
-        st.info("ℹ️ No datasets found. Please upload a dataset to get started.")
+        st.warning("No datasets found in the raw data directory.")
         return
     
     col1, col2 = st.columns([2, 1])
