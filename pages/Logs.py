@@ -33,7 +33,7 @@ def main():
     # Filter options
     st.sidebar.header("Filters")
     user_id = st.sidebar.text_input("Filter by User ID")
-    limit = st.sidebar.slider("Max entries", 10, 1000, 100)
+    limit = st.sidebar.slider("Max entries", 3, 50, 100)
     
     # Get and display requests
     requests = get_requests(user_id=user_id if user_id else None, limit=limit)
@@ -43,6 +43,13 @@ def main():
         return
     
     st.subheader("Recent Requests")
+    
+    # Add column headers
+    col_headers = st.columns([1, 2, 2, 2, 1, 1, 1, 1])
+    headers = ['ID', 'Timestamp', 'User', 'Model', 'Status', 'Input Size', 'Has Output', 'Delete']
+    for i, header in enumerate(headers):
+        with col_headers[i]:
+            st.markdown(f'**{header}**')
     
     # Create a DataFrame with all the data
     df = pd.DataFrame([{
