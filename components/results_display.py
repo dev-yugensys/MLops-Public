@@ -19,18 +19,63 @@ def display_iris_prediction(prediction: Dict[str, Any]):
             st.error(f"Error details: {prediction['error']}")
         return
     
-    # Get class names and colors from session state or use defaults
-    class_names = st.session_state.get('class_names', {})
+    # Get class names and colors from config
+    from config import CLASS_NAMES
     
-    # Handle case where class_names is a list
-    if isinstance(class_names, list):
-        class_names = {str(i): {"display": name, "color": "#666666"} 
-                      for i, name in enumerate(class_names)}
-    
-    # Get prediction details
-    predicted_class = str(prediction.get("class", "Unknown"))
+    # Get the prediction data
+    predicted_class = str(prediction.get("class", "Unknown")).strip()
     probabilities = prediction.get("probabilities", {})
-    confidence = max(probabilities.values(), default=0) * 100 if probabilities else 0
+    
+    # Debug print
+    print(f"\n=== Displaying Prediction ===")
+    print(f"Raw prediction: {prediction}")
+    print(f"Predicted class: {predicted_class}")
+    print(f"Probabilities: {probabilities}")
+    
+    # Use the class names from config
+    class_names = CLASS_NAMES.copy()
+    
+    # If we have numeric probabilities but no class names, create them
+    if probabilities and not any(isinstance(k, str) for k in probabilities.keys()):
+        print("Numeric probabilities detected, mapping to class names")
+        mapped_probs = {}
+        for i, prob in enumerate(probabilities):
+            class_name = f"Iris-{i}"  # Default name if not found
+            # Try to find a matching class name
+            for name in class_names.keys():
+                if str(i) in name or name.endswith(str(i)):
+                    class_name = name
+                    break
+            mapped_probs[class_name] = float(prob)
+        probabilities = mapped_probs
+        print(f"Mapped probabilities: {probabilities}")
+    
+    # Ensure all predicted classes are in class_names
+    for class_name in list(probabilities.keys()):
+        if class_name not in class_names:
+            display_name = class_name.replace('Iris-', '').title()
+            class_names[class_name] = {
+                "display": display_name,
+                "color": "#666666"
+            }
+    
+    # If it's a numeric index, try to map it to a class name
+    if predicted_class.isdigit():
+        idx = int(predicted_class)
+        if idx < len(class_names):
+            predicted_class = list(class_names.keys())[idx]
+        else:
+            # Try to find a class name that matches this index
+            for name in class_names.keys():
+                if str(idx) in name or name.endswith(str(idx)):
+                    predicted_class = name
+                    break
+    
+    # Calculate confidence
+    if not probabilities and 'confidence' in prediction:
+        confidence = float(prediction['confidence'])
+    else:
+        confidence = max(probabilities.values(), default=0) * 100 if probabilities else 0
     
     # Get display name and color for the predicted class
     class_info = class_names.get(predicted_class, {
@@ -149,13 +194,14 @@ def display_housing_prediction(prediction: Dict[str, Any]):
         <div style="
             border-radius: 10px;
             padding: 20px;
-            background-color: #f0f2f6;
+            background-color: #1f77b4;
+            color: white;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             margin-bottom: 20px;
         ">
-            <h3 style="margin-top: 0; color: #1f77b4;">Predicted House Value</h3>
-            <p style="font-size: 24px; font-weight: bold; margin-bottom: 10px;">{formatted_value}</p>
-            <p style="color: #666; margin-bottom: 0;">
+            <h3 style="margin-top: 0; color: white;">Predicted House Value</h3>
+            <p style="font-size: 28px; font-weight: bold; margin-bottom: 15px; color: white;">{formatted_value}</p>
+            <p style="color: rgba(255,255,255,0.9); margin-bottom: 0; font-size: 16px;">
                 Confidence: ${int(confidence_interval[0]):,} - ${int(confidence_interval[1]):,}
             </p>
         </div>

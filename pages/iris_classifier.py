@@ -31,20 +31,24 @@ def load_iris_model():
             # Load the model directly - it's saved as a raw model, not in a dictionary
             model = joblib.load(model_path)
             
+            # Get class names from config
+            class_names = list(CLASS_NAMES.keys())
+            
             # Create metadata with default values
             metadata = {
                 'features': ['sepal_length', 'sepal_width', 'petal_length', 'petal_width'],
-                'classes': ['Iris-setosa', 'Iris-versicolor', 'Iris-virginica'],
+                'classes': class_names,  # Use class names from config
                 'model_type': type(model).__name__
             }
             
             # If the model has feature names, use them
             if hasattr(model, 'feature_names_in_'):
                 metadata['features'] = list(model.feature_names_in_)
-                
-            # If the model has class names, use them
-            if hasattr(model, 'classes_'):
-                metadata['classes'] = [str(c) for c in model.classes_]
+            
+            # Ensure the model has the correct class names
+            if not hasattr(model, 'classes_'):
+                # If the model doesn't have classes, add them from config
+                model.classes_ = np.array(class_names)
             
             # Store model info in session state
             st.session_state.model_path = str(model_path)
@@ -54,7 +58,7 @@ def load_iris_model():
             st.sidebar.success("✓ Model loaded successfully")
             st.sidebar.write(f"**Model type:** {type(model).__name__}")
             st.sidebar.write("**Features:** " + ", ".join(metadata['features']))
-            st.sidebar.write("**Classes:** " + ", ".join(metadata['classes']))
+            st.sidebar.write("**Classes:** " + ", ".join(class_names))
             
             return model
             
@@ -65,7 +69,6 @@ def load_iris_model():
     except Exception as e:
         st.error(f"Failed to load model: {str(e)}")
         return None
-
 def predict_iris(model, features):
     """Make a prediction using the loaded model."""
     try:
@@ -73,25 +76,43 @@ def predict_iris(model, features):
         metadata = getattr(st.session_state, 'model_metadata', {})
         expected_features = metadata.get('features', [])
         
-        if not expected_features:
+        # Debug: Print model's feature names
+        print(f"Model's expected features: {expected_features}")
+        print(f"Model attributes: {dir(model) if model else 'No model'}")
+        
+        # Try to get feature names from the model if available
+        if hasattr(model, 'feature_names_in_'):
+            expected_features = list(model.feature_names_in_)
+            print(f"Using feature names from model: {expected_features}")
+        elif not expected_features:
             st.sidebar.warning("⚠️ Model has no feature names, using default feature order")
             print("Using standard features as model has no feature names")
-            expected_features = ['SepalLengthCm', 'SepalWidthCm', 'PetalLengthCm', 'PetalWidthCm']
+            expected_features = ['sepal length (cm)', 'sepal width (cm)', 'petal length (cm)', 'petal width (cm)']
         
         # Create input DataFrame with correct feature order
         input_data = {}
+        print(f"Mapping features. Input features: {features}")
+        
+        # Define all possible feature name variations
+        feature_mapping = {
+            'sepal_length': ['sepal_length', 'SepalLengthCm', 'sepal length (cm)'],
+            'sepal_width': ['sepal_width', 'SepalWidthCm', 'sepal width (cm)'],
+            'petal_length': ['petal_length', 'PetalLengthCm', 'petal length (cm)'],
+            'petal_width': ['petal_width', 'PetalWidthCm', 'petal width (cm)']
+        }
+        
+        # Map each expected feature to its value
         for feat in expected_features:
-            # Map feature names to match input format
-            if feat == 'SepalLengthCm':
-                input_data[feat] = [features['sepal_length']]
-            elif feat == 'SepalWidthCm':
-                input_data[feat] = [features['sepal_width']]
-            elif feat == 'PetalLengthCm':
-                input_data[feat] = [features['petal_length']]
-            elif feat == 'PetalWidthCm':
-                input_data[feat] = [features['petal_width']]
-            else:
-                # For any additional features, use default value of 0
+            mapped = False
+            for base_feature, aliases in feature_mapping.items():
+                if feat in aliases:
+                    input_data[feat] = [features[base_feature]]
+                    print(f"Mapped {base_feature} ({features[base_feature]}) to {feat}")
+                    mapped = True
+                    break
+                    
+            if not mapped:
+                print(f"Warning: No mapping found for feature: {feat}, using 0.0")
                 input_data[feat] = [0.0]
         
         # Create DataFrame with correct feature order
@@ -101,10 +122,9 @@ def predict_iris(model, features):
         print("\n=== Making Prediction ===")
         print(f"Input DataFrame shape: {input_df.shape}")
         print(f"Input DataFrame columns: {input_df.columns.tolist()}")
+        print(f"Input values: {input_df.values.tolist()}")
         
-        # Print model information for debugging
-        print("\n=== Model Information ===")
-        print(f"Model type: {type(model).__name__}")
+       
         
         if hasattr(model, 'predict_proba'):
             print("Calling predict_proba...")
@@ -117,7 +137,9 @@ def predict_iris(model, features):
             # Also get prediction using predict for consistency check
             predicted_class_idx_predict = model.predict(input_df)[0]
             print(f"Predicted class index (from predict): {predicted_class_idx_predict}")
-            
+            print(f"Prediction probabilities: {prediction_proba}")
+            print(f"Predicted class index: {predicted_class_idx}")
+            print(f"Model classes: {model.classes_ if hasattr(model, 'classes_') else 'No classes attribute'}")
             # Ensure we're using consistent predictions
             if predicted_class_idx != predicted_class_idx_predict:
                 print(f"Warning: predict and predict_proba disagree! Using predict_proba result: {predicted_class_idx}")
@@ -135,34 +157,49 @@ def predict_iris(model, features):
                 print(error_msg)
                 st.sidebar.warning(error_msg)
         
-        # Define the iris species mapping
-        iris_species = {
-            '0': 'Iris-setosa',
-            '1': 'Iris-versicolor',
-            '2': 'Iris-virginica'
-        }
-        
         # Get class names from model or use defaults
         if hasattr(model, 'classes_'):
             class_indices = [str(c) for c in model.classes_]
             print(f"Model class indices: {class_indices}")
             
-            # Map numeric indices to species names
-            class_names = [iris_species.get(idx, f"Unknown-{idx}") for idx in class_indices]
+            # Map numeric indices to species names using CLASS_NAMES from config
+            class_names = []
+            for idx in class_indices:
+                # Try to find the class name by index in CLASS_NAMES
+                for name, info in CLASS_NAMES.items():
+                    if str(idx) in name or str(idx) == name.split('-')[-1]:
+                        class_names.append(name)
+                        break
+                else:
+                    class_names.append(f"Unknown-{idx}")
             print(f"Mapped class names: {class_names}")
         else:
-            class_names = list(iris_species.values())
-            print(f"Using default class names: {class_names}")
+            # Use the class names from config
+            class_names = list(CLASS_NAMES.keys())
+            print(f"Using class names from config: {class_names}")
         
         # Map predicted class index to class name
         try:
+            # Get class names from CLASS_NAMES in the correct order
+            class_names = list(CLASS_NAMES.keys())
+            
+            # Ensure we have a valid prediction index
+            if predicted_class_idx < 0 or predicted_class_idx >= len(class_names):
+                print(f"Warning: Invalid prediction index {predicted_class_idx}, using first class")
+                predicted_class_idx = 0
+                
+            # Get the predicted class name
             predicted_class = class_names[predicted_class_idx]
             print(f"Mapped class index {predicted_class_idx} to species: {predicted_class}")
-        except IndexError as e:
-            error_msg = f"Class index {predicted_class_idx} out of range for classes {class_names}"
+        except Exception as e:
+            error_msg = f"Error mapping prediction: {str(e)}"
             print(error_msg)
-            st.sidebar.error(error_msg)
-            predicted_class = f"Unknown Class ({predicted_class_idx})"
+            st.sidebar.error("Error making prediction. Please try again.")
+            # Default to first class in case of error
+            predicted_class = list(CLASS_NAMES.keys())[0]
+            predicted_class_idx = 0
+            prediction_proba = [0.0] * len(CLASS_NAMES)
+            prediction_proba[0] = 1.0
         
         # Get the confidence score (probability of the predicted class)
         confidence_score = float(prediction_proba[predicted_class_idx]) * 100
@@ -193,21 +230,15 @@ def predict_iris(model, features):
         }
         
         # Update the UI to show the prediction and confidence
-        st.success(f"Prediction: {predicted_class}")
-        st.success(f"Confidence: {confidence_score:.2f}%")
+        # st.success(f"Prediction: {predicted_class}")
+        # st.success(f"Confidence: {confidence_score:.2f}%")
         
         # Show the probabilities in an expander
-        with st.expander("View detailed probabilities"):
-            for name, prob in result['prediction']['probabilities'].items():
-                st.write(f"- {name}: {prob*100:.2f}%")
+        # with st.expander("View detailed probabilities"):
+        #     for name, prob in result['prediction']['probabilities'].items():
+        #         st.write(f"- {name}: {prob*100:.2f}%")
         
-        # Log prediction details to sidebar
-        st.sidebar.write("### Prediction Details")
-        st.sidebar.write(f"**Predicted Class:** {predicted_class}")
-        st.sidebar.write("**Confidence:** {:.2f}%".format(confidence_score))
-        st.sidebar.write("**Probabilities:**")
-        for name, prob in result['prediction']['probabilities'].items():
-            st.sidebar.write(f"- {name}: {prob*100:.2f}%")
+       
         
         return result
         
@@ -243,8 +274,8 @@ def main():
         }
     
     # Debug: Show the loaded class names
-    st.sidebar.write("=== Class Names ===")
-    st.sidebar.write(CLASS_NAMES)
+    # st.sidebar.write("=== Class Names ===")
+    # st.sidebar.write(CLASS_NAMES)
     
     # Load the model
     model = load_iris_model()
@@ -280,11 +311,32 @@ def main():
                         )
                         
                         # Display prediction
-                        display_iris_prediction(prediction)
+                        if 'prediction' in prediction and 'probabilities' in prediction['prediction']:
+                            # Get the prediction with the highest probability
+                            probs = prediction['prediction']['probabilities']
+                            if probs:
+                                predicted_class = max(probs.items(), key=lambda x: x[1])[0]
+                                confidence = max(probs.values()) * 100
+                                
+                                # Display the prediction
+                                st.markdown(
+                                    f"""
+                                    <div style="border-left: 5px solid #4CAF50; padding: 10px 20px; margin: 10px 0;">
+                                        <h3>Prediction: <span style="color: #4CAF50;">{predicted_class}</span></h3>
+                                        <p>Confidence: <strong>{confidence:.1f}%</strong></p>
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+                                
+                                # Display probabilities in an expander
+                                with st.expander("View detailed probabilities"):
+                                    for class_name, prob in probs.items():
+                                        st.write(f"- {class_name}: {prob*100:.2f}%")
                         
-                        # Debug: Show the full prediction object
-                        st.sidebar.write("=== Full Prediction ===")
-                        st.sidebar.json(prediction)
+                        # Debug: Show the full prediction object in sidebar
+                        with st.sidebar.expander("Debug: Full Prediction"):
+                            st.json(prediction)
                 except Exception as e:
                     # Update the request with error
                     update_request(
