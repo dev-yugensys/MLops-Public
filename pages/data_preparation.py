@@ -188,33 +188,8 @@ def main():
     st.title("📊 Data Preparation")
     st.caption("Explore and preprocess datasets for machine learning")
     
-    # DVC Operations
-    st.header("🔄 Version Control")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("🔄 DVC Pull", help="Pull the latest dataset versions from DVC remote"):
-            with st.spinner("Pulling latest data from DVC..."):
-                try:
-                    result = subprocess.run(
-                        ["dvc", "pull"], 
-                        cwd=Path(__file__).parent.parent,
-                        capture_output=True, 
-                        text=True
-                    )
-                    if result.returncode == 0:
-                        st.success("✅ Successfully pulled latest data from DVC!")
-                        if result.stdout:
-                            st.code(result.stdout, language="bash")
-                    else:
-                        st.error(f"❌ Error pulling data: {result.stderr}")
-                except Exception as e:
-                    st.error(f"❌ Failed to execute DVC pull: {str(e)}")
-    
-    st.divider()
-    
     # List available datasets in raw data directory
-    st.header("🔍 Dataset Explorer")
+
     datasets = list_available_datasets()
     
     if not datasets:

@@ -4,7 +4,7 @@ from datetime import datetime
 import json
 from utils.db import get_requests, get_request_stats, delete_request
 
-st.set_page_config(page_title="Model Request Logs", layout="wide")
+st.set_page_config(page_title="Logs", layout="wide")
 
 def format_json(data: str) -> str:
     """Format JSON string for better readability."""
