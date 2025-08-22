@@ -150,5 +150,5 @@ mlruns.db
 
 # MLflow
 mlruns/
-*.pkl
+
 

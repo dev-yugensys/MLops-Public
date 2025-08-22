@@ -144,16 +144,33 @@ MODEL_CONFIGS = {
             }
         }
     },
-    "Housing Regression": {
+"Housing Regression": {
         "task_type": "regression",
         "metrics": ["mse", "mae", "r2", "explained_variance"],
         "models": {
+            "Linear Regression": {
+                "model": "sklearn.linear_model.LinearRegression",
+                "params": {
+                    "fit_intercept": [True, False],
+                    "positive": [True, False]
+                }
+            },
+            "Random Forest": {
+                "model": "sklearn.ensemble.RandomForestRegressor",
+                "params": {
+                    "n_estimators": [50, 100],
+                    "max_depth": [5, 10],
+                    "min_samples_split": [2, 5],
+                    "min_samples_leaf": [1, 2],
+                    "random_state": [42]
+                }
+            },
             "XGBoost": {
                 "model": "xgboost.XGBRegressor",
                 "params": {
-                    "n_estimators": [50, 100, 200],
-                    "learning_rate": [0.01, 0.1, 0.3],
-                    "max_depth": [3, 6, 9],
+                    "n_estimators": [50, 100],
+                    "learning_rate": [0.01, 0.1],
+                    "max_depth": [3, 6],
                     "subsample": [0.8, 1.0],
                     "colsample_bytree": [0.8, 1.0],
                     "random_state": [42]
@@ -164,7 +181,7 @@ MODEL_CONFIGS = {
                 "params": {
                     "n_estimators": [50, 100],
                     "learning_rate": [0.01, 0.1],
-                    "max_depth": [3, 5, 7],
+                    "max_depth": [3, 5],
                     "min_samples_split": [2, 5],
                     "min_samples_leaf": [1, 2],
                     "random_state": [42]
