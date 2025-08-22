@@ -624,16 +624,29 @@ if st.button("Train Models"):
         
         # Display metrics in a more readable format
         st.subheader("Best Model Metrics")
-        col1, col2 = st.columns(2)
         
-        with col1:
-            st.metric("Accuracy", f"{best_model_info['test_metrics'].get('accuracy', 0):.4f}")
-            st.metric("Precision", f"{best_model_info['test_metrics'].get('precision', 0):.4f}")
-        
-        with col2:
-            st.metric("Recall", f"{best_model_info['test_metrics'].get('recall', 0):.4f}")
-            st.metric("F1 Score", f"{best_model_info['test_metrics'].get('f1_score', 0):.4f}")
-        
+        if config['task_type'] == 'classification':
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.metric("Accuracy", f"{best_model_info['test_metrics'].get('accuracy', 0):.4f}")
+                st.metric("Precision", f"{best_model_info['test_metrics'].get('precision', 0):.4f}")
+            
+            with col2:
+                st.metric("Recall", f"{best_model_info['test_metrics'].get('recall', 0):.4f}")
+                st.metric("F1 Score", f"{best_model_info['test_metrics'].get('f1_score', 0):.4f}")
+                
+        else:  # regression
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.metric("R² Score", f"{best_model_info['test_metrics'].get('r2', 0):.4f}")
+                st.metric("Mean Absolute Error", f"{best_model_info['test_metrics'].get('mae', 0):.4f}")
+            
+            with col2:
+                st.metric("Mean Squared Error", f"{best_model_info['test_metrics'].get('mse', 0):.4f}")
+                st.metric("Explained Variance", f"{best_model_info['test_metrics'].get('explained_variance', 0):.4f}")
+            
         # Show confusion matrix if available
         if 'confusion_matrix' in best_model_info['test_metrics']:
             st.subheader("Confusion Matrix")
